@@ -1,0 +1,29 @@
+server:
+  port: 8004
+
+spring:
+  application:
+    name: audit-listener
+  datasource:
+    url: jdbc:postgresql://localhost:5314/auditdb
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    consumer:
+      bootstrap-servers: localhost:8090
+      group-id: ${spring.application.name}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: ryzendee.starter.audit.model
+      auto-offset-reset: earliest
+
+audit:
+  kafka:
+    listener:
+      topic:
+        name: application-logs-topic
