@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
@@ -23,8 +24,7 @@ import ryzendee.starter.audit.model.*;
 import static java.util.UUID.randomUUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ActiveProfiles("test")
 @Import({AuditRecordKafkaListenerTestConfig.class, KafkaAutoConfiguration.class})
@@ -77,6 +77,19 @@ public class AuditRecordKafkaListenerIT {
         verify(auditRecordRepository).saveAndFlush(any(AuditRecord.class));
         assertThat(headerMessageIdCaptor.getValue()).isNotNull();
         assertThat(payloadCaptor.getValue()).isNotNull();
+    }
+
+    @Test
+    void handleMethodAuditEntry_messageAlreadyProcessed_shouldDoNotSave() throws Exception {
+        ProducerRecord<String, Object> record = createProducerRecord(new MethodAuditLogEntry());
+        doThrow(DataIntegrityViolationException.class)
+                .when(auditRecordRepository).saveAndFlush(any(AuditRecord.class));
+
+        kafkaTemplate.send(record).get();
+
+        verify(auditKafkaListener, timeout(VERIFY_TIMEOUT))
+                .handleMethodAuditEntry(anyString(), any(MethodAuditLogEntry.class));
+        verify(auditRecordRepository, times(1)).saveAndFlush(any(AuditRecord.class));
     }
 
     private ProducerRecord<String, Object> createProducerRecord(Object obj) {
