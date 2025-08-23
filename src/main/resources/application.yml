@@ -9,21 +9,33 @@ spring:
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
+  elasticsearch:
+    uris: http://localhost:9200
   kafka:
+    bootstrap-servers: localhost:8090
     consumer:
-      bootstrap-servers: localhost:8090
       group-id: ${spring.application.name}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring:
-          json:
-            trusted:
-              packages: ryzendee.starter.audit.model
+        spring.json.trusted.packages: ryzendee.starter.audit.model
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 audit:
   kafka:
     listener:
       topic:
-        name: application-logs-topic
+        methods:
+          name: audit.methods
+        requests:
+          name: audit.requests
+        errors:
+          name: audit.errors
+          settings:
+              retry:
+                interval: 1000
+                max-attempts: 3
