@@ -24,3 +24,34 @@ services:
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+  
+  elasticsearch:
+    image: elasticsearch:8.18.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - ./configs/elastic/mappings:/mappings
+      - ./configs/elastic/init.sh:/init.sh
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 15
+      start_period: 90s
+
+  es-init:
+    image: curlimages/curl:8.15.0
+    container_name: es-init
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./configs/elastic/mappings:/mappings
+      - ./configs/elastic/init.sh:/init.sh
+    environment:
+      - ES_HOSTNAME=elasticsearch
+    entrypoint: [ "/bin/sh", "/init.sh" ]
