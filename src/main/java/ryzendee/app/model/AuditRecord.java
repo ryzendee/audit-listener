@@ -27,11 +27,7 @@ public class AuditRecord {
 
     private String messageId;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    private AuditLogEntry auditLogEntry;
-
-    public AuditRecord(String messageId, AuditLogEntry auditLogEntry) {
+    public AuditRecord(String messageId) {
         this.messageId = messageId;
-        this.auditLogEntry = auditLogEntry;
     }
 }

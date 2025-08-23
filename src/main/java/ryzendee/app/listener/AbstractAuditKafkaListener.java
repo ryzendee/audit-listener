@@ -35,7 +35,7 @@ public abstract class AbstractAuditKafkaListener<E extends AuditLogEntry> {
      */
     protected void handleMessage(String messageId, E entry) {
         try {
-            AuditRecord record = new AuditRecord(messageId, entry);
+            AuditRecord record = new AuditRecord(messageId);
             auditRecordRepository.saveAndFlush(record);
             process(entry, messageId);
             log.info("MessageId={} processed and stored", messageId);
