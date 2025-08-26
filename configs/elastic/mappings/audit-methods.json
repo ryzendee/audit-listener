@@ -1,0 +1,15 @@
+{
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "traceId": { "type": "keyword" },
+      "timestamp": { "type": "date" },
+      "logLevel": { "type": "keyword" },
+      "eventType": { "type": "keyword" },
+      "methodName": { "type": "keyword" },
+      "errorMessage": { "type": "text" },
+      "args": { "type": "text" },
+      "result": { "type": "text" }
+    }
+  }
+}

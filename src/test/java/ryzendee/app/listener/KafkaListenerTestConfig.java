@@ -21,7 +21,7 @@ import java.util.Map;
 @EnableKafka
 @TestConfiguration
 @ExtendWith(SpringExtension.class)
-class AuditRecordKafkaListenerTestConfig {
+class KafkaListenerTestConfig {
 
     @Autowired
     private Environment env;

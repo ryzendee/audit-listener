@@ -1,7 +1,6 @@
 package ryzendee.app.listener;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,17 +8,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.testcontainers.containers.PostgreSQLContainer;
+import ryzendee.app.mapper.MethodLogDocumentMapper;
 import ryzendee.app.model.AuditRecord;
+import ryzendee.app.model.MethodLogDocument;
 import ryzendee.app.repository.AuditRecordRepository;
-import ryzendee.starter.audit.model.*;
+import ryzendee.app.repository.MethodLogDocumentRepository;
+import ryzendee.starter.audit.model.MethodAuditLogEntry;
 
 import static java.util.UUID.randomUUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,73 +27,57 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ActiveProfiles("test")
-@Import({AuditRecordKafkaListenerTestConfig.class, KafkaAutoConfiguration.class})
+@Import({KafkaListenerTestConfig.class, KafkaAutoConfiguration.class})
 @EmbeddedKafka(
         controlledShutdown = true,
         bootstrapServersProperty = "spring.kafka.consumer.bootstrap-servers",
         kraft = true
 )
 @DirtiesContext
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, classes = {AuditKafkaListener.class})
-public class AuditRecordKafkaListenerIT {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, classes = {MethodLogEntryKafkaListener.class})
+public class MethodAuditLogEntryKafkaListenerIT {
 
     private static final int VERIFY_TIMEOUT = 15000;
 
     @MockitoSpyBean
-    public AuditKafkaListener auditKafkaListener;
+    public MethodLogEntryKafkaListener methodLogEntryKafkaListener;
 
     @MockitoBean
     public AuditRecordRepository auditRecordRepository;
+    @MockitoBean
+    private MethodLogDocumentMapper methodLogDocumentMapper;
+    @MockitoBean
+    private MethodLogDocumentRepository methodLogDocumentRepository;
+
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
-    @Value("${audit.kafka.listener.topic.name}")
-    private String auditTopic;
-
-    @Test
-    void handleHttpAuditEntry_shouldSaveEntry() throws Exception {
-        ProducerRecord<String, Object> record = createProducerRecord(new HttpAuditLogEntry());
-        ArgumentCaptor<String> headerMessageIdCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<HttpAuditLogEntry> payloadCaptor = ArgumentCaptor.forClass(HttpAuditLogEntry.class);
-
-        kafkaTemplate.send(record).get();
-
-        verify(auditKafkaListener, timeout(VERIFY_TIMEOUT))
-                .handleHttpAuditEntry(headerMessageIdCaptor.capture(), payloadCaptor.capture());
-        verify(auditRecordRepository).saveAndFlush(any(AuditRecord.class));
-        assertThat(headerMessageIdCaptor.getValue()).isNotNull();
-        assertThat(payloadCaptor.getValue()).isNotNull();
-    }
+    @Value("${audit.kafka.listener.topic.methods.name}")
+    private String auditMethodsTopic;
 
     @Test
     void handleMethodAuditEntry_shouldSaveEntry() throws Exception {
-        ProducerRecord<String, Object> record = createProducerRecord(new MethodAuditLogEntry());
+        // Arrange
+        ProducerRecord<String, Object> record = createProducerRecord(auditMethodsTopic, new MethodAuditLogEntry());
         ArgumentCaptor<String> headerMessageIdCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MethodAuditLogEntry> payloadCaptor = ArgumentCaptor.forClass(MethodAuditLogEntry.class);
+        when(methodLogDocumentMapper.toDocument(any(MethodAuditLogEntry.class)))
+                .thenReturn(new MethodLogDocument());
 
+        // Act
         kafkaTemplate.send(record).get();
-
-        verify(auditKafkaListener, timeout(VERIFY_TIMEOUT))
+        verify(methodLogEntryKafkaListener, timeout(VERIFY_TIMEOUT))
                 .handleMethodAuditEntry(headerMessageIdCaptor.capture(), payloadCaptor.capture());
+
+        // Assert
+        verify(methodLogDocumentMapper).toDocument(any(MethodAuditLogEntry.class));
+        verify(methodLogDocumentRepository).save(any(MethodLogDocument.class));
         verify(auditRecordRepository).saveAndFlush(any(AuditRecord.class));
         assertThat(headerMessageIdCaptor.getValue()).isNotNull();
         assertThat(payloadCaptor.getValue()).isNotNull();
     }
 
-    @Test
-    void handleMethodAuditEntry_messageAlreadyProcessed_shouldDoNotSave() throws Exception {
-        ProducerRecord<String, Object> record = createProducerRecord(new MethodAuditLogEntry());
-        doThrow(DataIntegrityViolationException.class)
-                .when(auditRecordRepository).saveAndFlush(any(AuditRecord.class));
-
-        kafkaTemplate.send(record).get();
-
-        verify(auditKafkaListener, timeout(VERIFY_TIMEOUT))
-                .handleMethodAuditEntry(anyString(), any(MethodAuditLogEntry.class));
-        verify(auditRecordRepository, times(1)).saveAndFlush(any(AuditRecord.class));
-    }
-
-    private ProducerRecord<String, Object> createProducerRecord(Object obj) {
-        ProducerRecord<String, Object> record = new ProducerRecord<>(auditTopic, obj);
+    private ProducerRecord<String, Object> createProducerRecord(String topic, Object obj) {
+        ProducerRecord<String, Object> record = new ProducerRecord<>(topic, obj);
         record.headers().add("messageId", randomUUID().toString().getBytes());
         return record;
     }
